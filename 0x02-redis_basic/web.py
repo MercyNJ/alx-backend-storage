@@ -51,7 +51,6 @@ if __name__ == "__main__":
     print(f"Content from slow URL:\n{slow_content}")
     print(f"Time taken: {end_time - start_time} seconds\n")
 
-    # Test the cache (should be fast now) and measure time
     start_time_cached = time.time()
     cached_slow_content = get_page(slow_url)
     end_time_cached = time.time()
@@ -59,6 +58,5 @@ if __name__ == "__main__":
     print(f"Cached content from slow URL:\n{cached_slow_content}")
     print(f"Ttaken(cached): {end_time_cached - start_time_cached} seconds\n")
 
-    # Test access count
     access_count = redis_client.get(f"count:{slow_url}")
     print(f"Access count for slow URL: {access_count.decode('utf-8')}")
