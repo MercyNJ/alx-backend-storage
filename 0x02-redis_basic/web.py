@@ -3,62 +3,62 @@
 Web Module - Implements functions for accessing and caching web pages.
 """
 
-import requests
 import redis
 import time
+import requests
 from functools import wraps
 
 redis_client = redis.Redis()
 
 
-def count_calls(method):
-    """Decorator to count how many times a method is called."""
+def cached_url(method):
+    """Decorator for the get_page function."""
     @wraps(method)
-    def wrapper(url, *args, **kwargs):
-        """Wrapper function for counting method calls."""
-        count_key = "count:{}".format(url)
-        count = redis_client.incr(count_key)
-        result = method(url, *args, **kwargs)
-        return result
+    def wrapper(url):
+        """Wrapper function."""
+        cache_key = "cached:" + url
+        cached_data = redis_client.get(cache_key)
+
+        if cached_data:
+            return cached_data.decode("utf-8")
+
+        count_key = "count:" + url
+        html_content = method(url)
+
+        redis_client.incr(count_key)
+        redis_client.setex(cache_key, 10, html_content)
+
+        return html_content
+
     return wrapper
 
 
-def cache_result(expiration=10):
-    """Decorator to cache the result of a method with an expiration time."""
-    def decorator(method):
-        @wraps(method)
-        def wrapper(url, *args, **kwargs):
-            """Wrapper function for caching method results."""
-            cache_key = "cache:{}".format(url)
-            cached_data = redis_client.get(cache_key)
-            if cached_data:
-                return cached_data.decode("utf-8")
-            else:
-                result = method(url, *args, **kwargs)
-                redis_client.setex(cache_key, expiration, result)
-                return result
-        return wrapper
-    return decorator
-
-
-@count_calls
-@cache_result(expiration=10)
-def get_page(url):
-    """Get the HTML content of a URL."""
+@cached_url
+def get_page(url: str) -> str:
+    """Obtain the HTML content of a particular URL."""
     response = requests.get(url)
     return response.text
 
 
-slow_url = (
-    "http://slowwly.robertomurray.co.uk/delay/1000/"
-    "url/http://www.example.com"
-)
+if __name__ == "__main__":
+    get_page('http://slowwly.robertomurray.co.uk')
 
-start_time = time.time()
-slow_response_1 = get_page(slow_url)
-slow_response_2 = get_page(slow_url)
-end_time = time.time()
+    slow_url = "http://slowwly.robertomurray.co.uk"
+    start_time = time.time()
+    slow_content = get_page(slow_url)
+    end_time = time.time()
 
-print("Slow Response 1:", slow_response_1)
-print("Slow Response 2:", slow_response_2)
-print("Elapsed Time:", end_time - start_time)
+    print(f"Content from slow URL:\n{slow_content}")
+    print(f"Time taken: {end_time - start_time} seconds\n")
+
+    # Test the cache (should be fast now) and measure time
+    start_time_cached = time.time()
+    cached_slow_content = get_page(slow_url)
+    end_time_cached = time.time()
+
+    print(f"Cached content from slow URL:\n{cached_slow_content}")
+    print(f"Ttaken(cached): {end_time_cached - start_time_cached} seconds\n")
+
+    # Test access count
+    access_count = redis_client.get(f"count:{slow_url}")
+    print(f"Access count for slow URL: {access_count.decode('utf-8')}")
