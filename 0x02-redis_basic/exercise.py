@@ -37,6 +37,39 @@ def call_history(method: Callable) -> Callable:
         return result
     return wrapper
 
+def replay(fn: Callable):
+    """
+    Display the history of calls for a particular function.
+    """
+
+    redis_client = redis.Redis()
+    target_name = fn.__qualname__
+    value = redis_client.get(target_name)
+
+    try:
+        value = int(value.decode("utf-8"))
+    except Exception:
+        value = 0
+
+    print("{} was called {} times:".format(target_name, value))
+
+    inputs = redis_client.lrange("{}:inputs".format(target_name), 0, -1)
+    outputs = redis_client.lrange("{}:outputs".format(target_name), 0, -1)
+
+    for input, output in zip(inputs, outputs):
+        try:
+            input = input.decode("utf-8")
+        except Exception:
+            input = ""
+
+        try:
+            output = output.decode("utf-8")
+        except Exception:
+            output = ""
+
+        print("{}(*{}) -> {}".format(target_name, input, output))
+
+
 
 class Cache:
     """
@@ -83,14 +116,9 @@ class Cache:
         """
         return self.get(key, fn=int)
 
+
 cache = Cache()
-
-TEST_CASES = {
-    b"foo": None,
-    123: int,
-    "bar": lambda d: d.decode("utf-8")
-}
-
-for value, fn in TEST_CASES.items():
-    key = cache.store(value)
-    assert cache.get(key, fn=fn) == value
+cache.store("foo")
+cache.store("bar")
+cache.store(42)
+replay(cache.store)
